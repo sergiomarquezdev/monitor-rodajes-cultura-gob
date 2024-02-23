@@ -11,7 +11,8 @@ from email import encoders
 from urllib.parse import urljoin  # Importar urljoin para manejar URLs relativas
 
 # Configuración de logging
-logging.basicConfig(filename='/home/ubuntu/py_scripts/monitor_de_rodajes.log', level=logging.DEBUG, format='%(asctime)s %(message)s')
+logging.basicConfig(filename='/home/ubuntu/py_scripts/monitor_de_rodajes.log', level=logging.DEBUG,
+                    format='%(asctime)s %(message)s')
 
 # Uso de variables de entorno para datos sensibles
 EMAIL_USER = os.getenv('EMAIL_USER')
@@ -22,6 +23,7 @@ EMAIL_RECV = os.getenv('EMAIL_RECV')
 URL = 'https://www.cultura.gob.es/en/cultura/areas/cine/datos/rodajes.html'
 STATE_FILE = '/home/ubuntu/py_scripts/estado_rodajes.txt'
 USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
+
 
 class PDFDownloader:
     @staticmethod
@@ -41,6 +43,7 @@ class PDFDownloader:
         except Exception as e:
             logging.error(f'Excepción al descargar el PDF: {e}')
             return None
+
 
 class EmailSender:
     @staticmethod
@@ -83,11 +86,7 @@ class EmailSender:
                     os.remove(pdf_path)
                 except Exception as e:
                     logging.error(f"Error al eliminar el archivo PDF: {e}")
-            if 'server' in locals() and server:
-                try:
-                    server.quit()
-                except Exception as e:
-                    logging.error(f"Error al cerrar la conexión SMTP: {e}")
+
 
 class CambioRodajesMonitor:
     @staticmethod
@@ -121,6 +120,7 @@ class CambioRodajesMonitor:
                 logging.error(f'Error al hacer la solicitud: Código de estado {respuesta.status_code}')
         except requests.exceptions.RequestException as e:
             logging.error(f'Error de red o HTTP al intentar acceder a la página: {e}')
+
 
 # Ejecutar la verificación y notificación
 CambioRodajesMonitor.verificar_cambio_y_notificar()
