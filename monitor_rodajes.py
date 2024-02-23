@@ -1,0 +1,126 @@
+#!/usr/bin/python3
+import os
+import requests
+from bs4 import BeautifulSoup
+import logging
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
+from email import encoders
+from urllib.parse import urljoin  # Importar urljoin para manejar URLs relativas
+
+# Configuración de logging
+logging.basicConfig(filename='/home/ubuntu/py_scripts/monitor_de_rodajes.log', level=logging.DEBUG, format='%(asctime)s %(message)s')
+
+# Uso de variables de entorno para datos sensibles
+EMAIL_USER = os.getenv('EMAIL_USER')
+EMAIL_PASS = os.getenv('EMAIL_PASS')
+EMAIL_RECV = os.getenv('EMAIL_RECV')
+
+# Constantes de configuración
+URL = 'https://www.cultura.gob.es/en/cultura/areas/cine/datos/rodajes.html'
+STATE_FILE = '/home/ubuntu/py_scripts/estado_rodajes.txt'
+USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
+
+class PDFDownloader:
+    @staticmethod
+    def descargar_pdf(url, path):
+        try:
+            # Construir la URL completa en caso de que la URL sea relativa
+            full_url = urljoin(URL, url)
+            response = requests.get(full_url, stream=True, verify=False)
+            if response.status_code == 200:
+                with open(path, 'wb') as file:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        file.write(chunk)
+                return path
+            else:
+                logging.error(f'Error al descargar el PDF. Código de respuesta: {response.status_code}')
+                return None
+        except Exception as e:
+            logging.error(f'Excepción al descargar el PDF: {e}')
+            return None
+
+class EmailSender:
+    @staticmethod
+    def enviar_email(href, texto, pdf_path=None):
+        logging.info("Enviando email...")
+        try:
+            msg = MIMEMultipart()
+            msg['From'] = EMAIL_USER
+            msg['To'] = EMAIL_RECV
+            msg['Subject'] = 'Notificación de cambio en Rodajes'
+
+            body = f'Se ha detectado un cambio en la página de rodajes:\n{href}\nTexto: {texto}'
+            msg.attach(MIMEText(body, 'plain'))
+
+            if pdf_path:
+                part = MIMEBase('application', 'octet-stream')
+                with open(pdf_path, 'rb') as file:
+                    part.set_payload(file.read())
+                encoders.encode_base64(part)
+                part.add_header('Content-Disposition', f'attachment; filename={os.path.basename(pdf_path)}')
+                msg.attach(part)
+
+            server = smtplib.SMTP('smtp.gmail.com', 587)
+            server.starttls()
+            server.login(EMAIL_USER, EMAIL_PASS)
+            server.sendmail(EMAIL_USER, EMAIL_RECV, msg.as_string())
+            server.quit()
+        except smtplib.SMTPAuthenticationError:
+            logging.error("Error de autenticación con el servidor SMTP. Revisa tus credenciales.")
+            os.remove(STATE_FILE)
+        except smtplib.SMTPException as e:
+            logging.error(f"Error al enviar el email: {e}")
+            os.remove(STATE_FILE)
+        except Exception as e:
+            logging.error(f"Error inesperado al enviar el email: {e}")
+            os.remove(STATE_FILE)
+        finally:
+            if pdf_path:
+                try:
+                    os.remove(pdf_path)
+                except Exception as e:
+                    logging.error(f"Error al eliminar el archivo PDF: {e}")
+            if 'server' in locals() and server:
+                try:
+                    server.quit()
+                except Exception as e:
+                    logging.error(f"Error al cerrar la conexión SMTP: {e}")
+
+class CambioRodajesMonitor:
+    @staticmethod
+    def verificar_cambio_y_notificar():
+        logging.info("Comenzando la verificación de cambios.")
+        try:
+            with open(STATE_FILE, 'r') as file:
+                ultimo_href, ultimo_texto = file.read().split('\n')
+        except FileNotFoundError:
+            ultimo_href, ultimo_texto = '', ''
+
+        session = requests.Session()
+        session.headers.update({'User-Agent': USER_AGENT})
+
+        try:
+            respuesta = session.get(URL, verify=False)
+            if respuesta.status_code == 200:
+                soup = BeautifulSoup(respuesta.content, 'html.parser')
+                primer_elemento = soup.select_one('.elemento a')
+                if primer_elemento:
+                    href_actual = primer_elemento['href']
+                    texto_actual = primer_elemento.get_text(strip=True)
+                    if href_actual != ultimo_href or texto_actual != ultimo_texto:
+                        logging.info(f'El enlace ha cambiado a: {href_actual} con texto "{texto_actual}"')
+                        os.makedirs('/home/ubuntu/py_scripts/pdf', exist_ok=True)
+                        pdf_path = PDFDownloader.descargar_pdf(href_actual, '/home/ubuntu/py_scripts/pdf/rodajes.pdf')
+                        EmailSender.enviar_email(href_actual, texto_actual, pdf_path)
+                        with open(STATE_FILE, 'w') as file:
+                            file.write(f'{href_actual}\n{texto_actual}')
+            else:
+                logging.error(f'Error al hacer la solicitud: Código de estado {respuesta.status_code}')
+        except requests.exceptions.RequestException as e:
+            logging.error(f'Error de red o HTTP al intentar acceder a la página: {e}')
+
+# Ejecutar la verificación y notificación
+CambioRodajesMonitor.verificar_cambio_y_notificar()
