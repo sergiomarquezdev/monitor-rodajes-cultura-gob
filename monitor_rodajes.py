@@ -8,7 +8,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
 from email import encoders
-from urllib.parse import urljoin  # Importar urljoin para manejar URLs relativas
+from urllib.parse import urljoin
 
 # Configuración de logging
 logging.basicConfig(filename='/home/ubuntu/py_scripts/monitor_de_rodajes.log', level=logging.DEBUG,
@@ -22,6 +22,7 @@ EMAIL_RECV = os.getenv('EMAIL_RECV')
 # Constantes de configuración
 URL = 'https://www.cultura.gob.es/en/cultura/areas/cine/datos/rodajes.html'
 STATE_FILE = '/home/ubuntu/py_scripts/estado_rodajes.txt'
+HISTORY_FILE = '/home/ubuntu/py_scripts/historial_rodajes.txt'
 USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
 
 
@@ -29,7 +30,6 @@ class PDFDownloader:
     @staticmethod
     def descargar_pdf(url, path):
         try:
-            # Construir la URL completa en caso de que la URL sea relativa
             full_url = urljoin(URL, url)
             response = requests.get(full_url, stream=True, verify=False)
             if response.status_code == 200:
@@ -94,7 +94,7 @@ class CambioRodajesMonitor:
         logging.info("Comenzando la verificación de cambios.")
         try:
             with open(STATE_FILE, 'r') as file:
-                ultimo_href, ultimo_texto = file.read().split('\n')
+                ultimo_href, ultimo_texto = file.read().strip().split('\n')
         except FileNotFoundError:
             ultimo_href, ultimo_texto = '', ''
 
@@ -109,13 +109,15 @@ class CambioRodajesMonitor:
                 if primer_elemento:
                     href_actual = primer_elemento['href']
                     texto_actual = primer_elemento.get_text(strip=True)
-                    if href_actual != ultimo_href or texto_actual != ultimo_texto:
+                    if href_actual != ultimo_href || texto_actual != ultimo_texto:
                         logging.info(f'El enlace ha cambiado a: {href_actual} con texto "{texto_actual}"')
                         os.makedirs('/home/ubuntu/py_scripts/pdf', exist_ok=True)
                         pdf_path = PDFDownloader.descargar_pdf(href_actual, '/home/ubuntu/py_scripts/pdf/rodajes.pdf')
                         EmailSender.enviar_email(href_actual, texto_actual, pdf_path)
                         with open(STATE_FILE, 'w') as file:
                             file.write(f'{href_actual}\n{texto_actual}')
+                        with open(HISTORY_FILE, 'a') as history_file:
+                            history_file.write(f'{href_actual}\n{texto_actual}\n')
             else:
                 logging.error(f'Error al hacer la solicitud: Código de estado {respuesta.status_code}')
         except requests.exceptions.RequestException as e:
