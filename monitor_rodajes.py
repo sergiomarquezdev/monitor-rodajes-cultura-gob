@@ -91,7 +91,7 @@ class EmailSender:
 class CambioRodajesMonitor:
     @staticmethod
     def verificar_cambio_y_notificar():
-        logging.info("Comenzando la verificación de cambios.")
+        logging.info("\nComenzando la verificación de cambios.")
         try:
             with open(STATE_FILE, 'r') as file:
                 ultimo_href, ultimo_texto = file.read().strip().split('\n')
