@@ -109,7 +109,7 @@ class CambioRodajesMonitor:
                 if primer_elemento:
                     href_actual = primer_elemento['href']
                     texto_actual = primer_elemento.get_text(strip=True)
-                    if href_actual != ultimo_href || texto_actual != ultimo_texto:
+                    if href_actual != ultimo_href or texto_actual != ultimo_texto:
                         logging.info(f'El enlace ha cambiado a: {href_actual} con texto "{texto_actual}"')
                         os.makedirs('/home/ubuntu/py_scripts/pdf', exist_ok=True)
                         pdf_path = PDFDownloader.descargar_pdf(href_actual, '/home/ubuntu/py_scripts/pdf/rodajes.pdf')
