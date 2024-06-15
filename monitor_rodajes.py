@@ -197,6 +197,7 @@ class CambioRodajesMonitor:
                         else:
                             differences = "No se encontró un PDF anterior para comparar."
 
+                        logging.info(f'Diferencias encontradas:\n{differences}')
                         EmailSender.enviar_email(href_actual, texto_actual, differences, pdf_path_actual)
 
                         # Renombrar el PDF actual a PDF anterior después de enviar el correo
