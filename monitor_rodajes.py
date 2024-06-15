@@ -9,6 +9,8 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
 from email import encoders
 from urllib.parse import urljoin
+import PyPDF2
+import openai
 
 # Configuración de logging
 logging.basicConfig(filename='/home/ubuntu/py_scripts/monitor_de_rodajes.log', level=logging.DEBUG,
@@ -18,6 +20,10 @@ logging.basicConfig(filename='/home/ubuntu/py_scripts/monitor_de_rodajes.log', l
 EMAIL_USER = os.getenv('EMAIL_USER')
 EMAIL_PASS = os.getenv('EMAIL_PASS')
 EMAIL_RECV = os.getenv('EMAIL_RECV')
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+
+# Configura tu clave API de OpenAI
+openai.api_key = OPENAI_API_KEY
 
 # Constantes de configuración
 URL = 'https://www.cultura.gob.es/en/cultura/areas/cine/datos/rodajes.html'
@@ -45,9 +51,83 @@ class PDFDownloader:
             return None
 
 
+class PDFComparer:
+    @staticmethod
+    def extract_text_from_pdf(pdf_path):
+        try:
+            with open(pdf_path, 'rb') as file:
+                reader = PyPDF2.PdfFileReader(file)
+                text = ""
+                for page_num in range(reader.numPages):
+                    text += reader.getPage(page_num).extract_text()
+                return text
+        except Exception as e:
+            logging.error(f'Error al extraer texto del PDF: {e}')
+            return ""
+
+
+class PDFComparer:
+    @staticmethod
+    def extract_text_from_pdf(pdf_path):
+        try:
+            with open(pdf_path, 'rb') as file:
+                reader = PyPDF2.PdfFileReader(file)
+                text = ""
+                for page_num in range(reader.numPages):
+                    text += reader.getPage(page_num).extract_text()
+                return text
+        except Exception as e:
+            logging.error(f'Error al extraer texto del PDF: {e}')
+            return ""
+
+    @staticmethod
+    def compare_texts(text1, text2):
+        prompt = f"""
+        Estos son PDFs que se actualizan cada pocos días y contienen los rodajes notificados al ICAA, organizados por año y mes. 
+        En cada PDF, los rodajes están divididos en tablas por meses, y cada mes tiene una tabla con las siguientes columnas:
+        - TÍTULO
+        - PRODUCTORA
+        - DIRECCIÓN
+        - INICIO RODAJE
+        - FIN RODAJE
+        
+        Tengo dos listas de rodajes extraídas de estos PDFs. La primera lista es de una versión anterior del PDF y la segunda lista es de una versión más reciente del PDF. Quiero que compares las dos listas y me indiques los nuevos registros que se han añadido en la versión más reciente. Los nuevos registros deben destacarse con las diferencias en:
+        - TÍTULO
+        - PRODUCTORA
+        - DIRECCIÓN
+        - INICIO RODAJE
+        - FIN RODAJE
+        
+        A continuación se presentan los textos a comparar:
+        
+        Texto 1 (versión anterior):
+        {text1}
+        
+        Texto 2 (versión más reciente):
+        {text2}
+        
+        Nuevos registros añadidos:
+        """
+
+        try:
+            response = openai.ChatCompletion.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": "Eres un experto en comparar listas de datos estructurados."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=1500,
+                temperature=0  # Ajuste de temperatura para respuestas más consistentes
+            )
+            return response.choices[0].message['content']
+        except Exception as e:
+            logging.error(f'Error al comparar textos con la API de OpenAI: {e}')
+            return ""
+
+
 class EmailSender:
     @staticmethod
-    def enviar_email(href, texto, pdf_path=None):
+    def enviar_email(href, texto, differences, pdf_path=None):
         logging.info("Enviando email...")
         try:
             msg = MIMEMultipart()
@@ -55,7 +135,7 @@ class EmailSender:
             msg['To'] = EMAIL_RECV
             msg['Subject'] = 'Notificación de cambio en Rodajes'
 
-            body = f'Se ha detectado un cambio en la página de rodajes:\n{href}\nTexto: {texto}'
+            body = f'Se han detectado cambios en la página de rodajes:\n{href}\nTexto: {texto}\n\nDiferencias encontradas:\n{differences}'
             msg.attach(MIMEText(body, 'plain'))
 
             if pdf_path:
@@ -80,12 +160,6 @@ class EmailSender:
         except Exception as e:
             logging.error(f"Error inesperado al enviar el email: {e}")
             os.remove(STATE_FILE)
-        finally:
-            if pdf_path:
-                try:
-                    os.remove(pdf_path)
-                except Exception as e:
-                    logging.error(f"Error al eliminar el archivo PDF: {e}")
 
 
 class CambioRodajesMonitor:
@@ -112,8 +186,24 @@ class CambioRodajesMonitor:
                     if href_actual != ultimo_href or texto_actual != ultimo_texto:
                         logging.info(f'El enlace ha cambiado a: {href_actual} con texto "{texto_actual}"')
                         os.makedirs('/home/ubuntu/py_scripts/pdf', exist_ok=True)
-                        pdf_path = PDFDownloader.descargar_pdf(href_actual, '/home/ubuntu/py_scripts/pdf/rodajes.pdf')
-                        EmailSender.enviar_email(href_actual, texto_actual, pdf_path)
+                        pdf_path_actual = '/home/ubuntu/py_scripts/pdf/rodajes_actual.pdf'
+                        pdf_path_anterior = '/home/ubuntu/py_scripts/pdf/rodajes_anterior.pdf'
+                        PDFDownloader.descargar_pdf(href_actual, pdf_path_actual)
+
+                        if os.path.exists(pdf_path_anterior):
+                            text1 = PDFComparer.extract_text_from_pdf(pdf_path_anterior)
+                            text2 = PDFComparer.extract_text_from_pdf(pdf_path_actual)
+                            differences = PDFComparer.compare_texts(text1, text2)
+                        else:
+                            differences = "No se encontró un PDF anterior para comparar."
+
+                        EmailSender.enviar_email(href_actual, texto_actual, differences, pdf_path_actual)
+
+                        # Renombrar el PDF actual a PDF anterior después de enviar el correo
+                        if os.path.exists(pdf_path_anterior):
+                            os.remove(pdf_path_anterior)
+                        os.rename(pdf_path_actual, pdf_path_anterior)
+
                         with open(STATE_FILE, 'w') as file:
                             file.write(f'{href_actual}\n{texto_actual}')
                         with open(HISTORY_FILE, 'a') as history_file:
