@@ -83,6 +83,8 @@ class PDFComparer:
         - INICIO RODAJE
         - FIN RODAJE
         
+        Si no hay diferencias, simplemente responde con: "No se han encontrado diferencias."
+        
         A continuación se presentan los textos a comparar:
         
         Texto 1 (versión anterior):
