@@ -9,8 +9,8 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
 from email import encoders
 from urllib.parse import urljoin
-import PyPDF2
-import openai
+from PyPDF2 import PdfReader
+from openai import OpenAI
 
 # Configuración de logging
 logging.basicConfig(filename='/home/ubuntu/py_scripts/monitor_de_rodajes.log', level=logging.DEBUG,
@@ -23,7 +23,7 @@ EMAIL_RECV = os.getenv('EMAIL_RECV')
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 
 # Configura tu clave API de OpenAI
-openai.api_key = OPENAI_API_KEY
+client = OpenAI(api_key=OPENAI_API_KEY)
 
 # Constantes de configuración
 URL = 'https://www.cultura.gob.es/en/cultura/areas/cine/datos/rodajes.html'
@@ -56,25 +56,10 @@ class PDFComparer:
     def extract_text_from_pdf(pdf_path):
         try:
             with open(pdf_path, 'rb') as file:
-                reader = PyPDF2.PdfFileReader(file)
+                reader = PdfReader(file)
                 text = ""
-                for page_num in range(reader.numPages):
-                    text += reader.getPage(page_num).extract_text()
-                return text
-        except Exception as e:
-            logging.error(f'Error al extraer texto del PDF: {e}')
-            return ""
-
-
-class PDFComparer:
-    @staticmethod
-    def extract_text_from_pdf(pdf_path):
-        try:
-            with open(pdf_path, 'rb') as file:
-                reader = PyPDF2.PdfFileReader(file)
-                text = ""
-                for page_num in range(reader.numPages):
-                    text += reader.getPage(page_num).extract_text()
+                for page in reader.pages:
+                    text += page.extract_text()
                 return text
         except Exception as e:
             logging.error(f'Error al extraer texto del PDF: {e}')
@@ -110,16 +95,14 @@ class PDFComparer:
         """
 
         try:
-            response = openai.ChatCompletion.create(
+            response = client.chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=[
                     {"role": "system", "content": "Eres un experto en comparar listas de datos estructurados."},
                     {"role": "user", "content": prompt}
-                ],
-                max_tokens=1500,
-                temperature=0  # Ajuste de temperatura para respuestas más consistentes
+                ]
             )
-            return response.choices[0].message['content']
+            return response.choices[0].message.content
         except Exception as e:
             logging.error(f'Error al comparar textos con la API de OpenAI: {e}')
             return ""
