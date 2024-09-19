@@ -7,9 +7,14 @@ from urllib.parse import urljoin
 from PyPDF2 import PdfReader
 from openai import OpenAI
 from typing import Optional, Tuple
+from pathlib import Path
+
+# Definición de rutas relativas
+BASE_DIR = Path(__file__).resolve().parent
 
 # Configuración de logging
-logging.basicConfig(filename='/home/ubuntu/py_scripts/monitor_de_rodajes.log', level=logging.DEBUG,
+log_file = BASE_DIR / 'monitor_de_rodajes.log'
+logging.basicConfig(filename=log_file, level=logging.DEBUG,
                     format='%(asctime)s %(message)s')
 
 # Uso de variables de entorno para datos sensibles
@@ -21,12 +26,14 @@ OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 # Configura tu clave API de OpenAI
 client = OpenAI(api_key=OPENAI_API_KEY)
 
-# Constantes de configuración
 URL = 'https://www.cultura.gob.es/en/cultura/areas/cine/datos/rodajes.html'
-STATE_FILE = '/home/ubuntu/py_scripts/estado_rodajes.txt'
-HISTORY_FILE = '/home/ubuntu/py_scripts/historial_rodajes.txt'
+STATE_FILE = BASE_DIR / 'estado_rodajes.txt'
+HISTORY_FILE = BASE_DIR / 'historial_rodajes.txt'
+PDF_DIR = BASE_DIR / 'pdf'
 USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
 
+# Asegúrate de que el directorio de PDFs existe
+PDF_DIR.mkdir(parents=True, exist_ok=True)
 
 def descargar_pdf(url: str, path: str) -> Optional[str]:
     """Descarga un PDF desde la URL especificada y lo guarda en el path dado."""
@@ -151,11 +158,11 @@ def verificar_cambio_y_notificar():
                 texto_actual = primer_elemento.get_text(strip=True)
                 if href_actual != ultimo_href or texto_actual != ultimo_texto:
                     logging.info(f'El enlace ha cambiado a: {href_actual} con texto "{texto_actual}"')
-                    pdf_path_actual = '/home/ubuntu/py_scripts/pdf/rodajes_actual.pdf'
-                    pdf_path_anterior = '/home/ubuntu/py_scripts/pdf/rodajes_anterior.pdf'
+                    pdf_path_actual = PDF_DIR / 'rodajes_actual.pdf'
+                    pdf_path_anterior = PDF_DIR / 'rodajes_anterior.pdf'
                     descargar_pdf(href_actual, pdf_path_actual)
 
-                    if os.path.exists(pdf_path_anterior):
+                    if pdf_path_anterior.exists():
                         text1 = extraer_texto_pdf(pdf_path_anterior)
                         text2 = extraer_texto_pdf(pdf_path_actual)
                         diferencias = comparar_textos(text1, text2)
@@ -166,9 +173,9 @@ def verificar_cambio_y_notificar():
                     enviar_email(href_actual, texto_actual, diferencias, pdf_path_actual)
 
                     # Renombrar el PDF actual a PDF anterior después de enviar el correo
-                    if os.path.exists(pdf_path_anterior):
-                        os.remove(pdf_path_anterior)
-                    os.rename(pdf_path_actual, pdf_path_anterior)
+                    if pdf_path_anterior.exists():
+                        pdf_path_anterior.unlink()
+                    pdf_path_actual.rename(pdf_path_anterior)
 
                     with open(STATE_FILE, 'w') as file:
                         file.write(f'{href_actual}\n{texto_actual}')
