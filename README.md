@@ -1,0 +1,1 @@
+Crontab: 0 */4 * * * source /home/ubuntu/py_scripts/.env && echo "\n[$(date)] Inicio de la ejecución del script:" >> /home/ubuntu/log.log; /usr/bin/python3 /home/ubuntu/py_scripts/monitor_rodajes.py >> /home/ubuntu/log.log 2>&1
