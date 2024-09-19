@@ -1,20 +1,20 @@
 # Monitor de Rodajes
 
-Este script en Python realiza scraping en la página web del Ministerio de Cultura de España para detectar cambios en la sección de rodajes. Cuando se detecta un nuevo documento, el script descarga el PDF actualizado y compara su contenido con la versión anterior, enviando un correo electrónico con las diferencias encontradas.
+Este script en Python realiza scraping en la página web del Ministerio de Cultura de España para detectar cambios en la sección de rodajes. Cuando se detecta un nuevo documento, el script descarga el PDF actualizado, compara su contenido con la versión anterior y envía un correo electrónico con las diferencias encontradas.
 
 ## Requisitos
 
-- Python 3.x
-- Bibliotecas:
-  - requests
-  - beautifulsoup4
-  - PyPDF2
-  - openai
-  - smtplib
+- **Python**: 3.x
+- **Bibliotecas**:
+  - `requests`
+  - `beautifulsoup4`
+  - `PyPDF2`
+  - `openai`
+  - `smtplib`
 
 ## Configuración
 
-1. **Variables de Entorno**: Asegúrate de definir las siguientes variables en un archivo `.env`:
+1. **Variables de Entorno**: Define las siguientes variables en un archivo `.env` o en tus variables de entorno:
    - `EMAIL_USER`: Tu dirección de correo electrónico.
    - `EMAIL_PASS`: Tu contraseña de correo electrónico.
    - `EMAIL_RECV`: Dirección de correo electrónico del destinatario.
@@ -42,7 +42,7 @@ Los errores y eventos se registran en el archivo `monitor_de_rodajes.log`.
 
 ## Contribuciones
 
-Las contribuciones son bienvenidas. Por favor, abre un issue o un pull request para discutir cambios.
+Las contribuciones son bienvenidas. Abre un issue o un pull request para discutir cambios.
 
 ## Licencia
 
